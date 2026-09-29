@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" width="100%" height="100%">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E5C788" />
+      <stop offset="45%" stop-color="#C6A15B" />
+      <stop offset="70%" stop-color="#DFBD75" />
+      <stop offset="100%" stop-color="#9A7B38" />
+    </linearGradient>
+    <filter id="subtleGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  
+  <!-- Interlocking DD Monogram -->
+  <g transform="translate(60, 25)">
+    <!-- First D -->
+    <path d="M 15 15 L 45 15 C 75 15 95 35 95 65 C 95 95 75 115 45 115 L 15 115 Z" 
+          fill="none" stroke="url(#goldGrad)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+    <line x1="15" y1="15" x2="15" y2="115" stroke="url(#goldGrad)" stroke-width="8" stroke-linecap="round" />
+    
+    <!-- Interlocking Second D -->
+    <path d="M 38 32 L 62 32 C 86 32 105 48 105 72 C 105 96 86 112 62 112 L 38 112 Z" 
+          fill="none" stroke="url(#goldGrad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+    <line x1="38" y1="32" x2="38" y2="112" stroke="url(#goldGrad)" stroke-width="7" stroke-linecap="round" />
+  </g>
+
+  <!-- Typography -->
+  <g transform="translate(200, 60)">
+    <text x="0" y="24" font-family="'Cormorant Garamond', 'Cinzel', 'Playfair Display', Georgia, serif" 
+          font-size="34" font-weight="600" letter-spacing="0.25em" fill="url(#goldGrad)">
+      DERMA DIVINE
+    </text>
+    <text x="3" y="55" font-family="'Manrope', 'Inter', -apple-system, sans-serif" 
+          font-size="12" font-weight="500" letter-spacing="0.45em" fill="#DDE5DF">
+      AESTHETICS BY DMAC
+    </text>
+    <text x="3" y="78" font-family="'Manrope', 'Inter', -apple-system, sans-serif" 
+          font-size="9" font-weight="400" letter-spacing="0.38em" fill="#C6A15B" opacity="0.9">
+      SKIN  •  HAIR  •  PLASTIC SURGERY  •  WELLNESS
+    </text>
+  </g>
+</svg>

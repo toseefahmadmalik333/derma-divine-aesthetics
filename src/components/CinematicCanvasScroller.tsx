@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Sparkles, ChevronDown } from 'lucide-react';
+import { ChevronDown, Sparkles } from 'lucide-react';
 import { sceneTimeline } from '../data/sceneTimeline';
 import { FilmExperienceOverlay } from './FilmExperienceOverlay';
 
@@ -21,65 +21,15 @@ export const CinematicCanvasScroller: React.FC<CinematicCanvasScrollerProps> = (
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [images, setImages] = useState<HTMLImageElement[]>([]);
-  const [loadProgress, setLoadProgress] = useState<number>(0);
-  const [isLoaded, setIsLoaded] = useState<boolean>(false);
+  // High-performance image cache via ref to avoid unnecessary re-renders during high-speed scrubbing
+  const imagesRef = useRef<(HTMLImageElement | null)[]>(new Array(TOTAL_FRAMES).fill(null));
+  const [isReady, setIsReady] = useState<boolean>(false);
   const [scrollProgress, setScrollProgress] = useState<number>(0);
   const [activeSceneIndex, setActiveSceneIndex] = useState<number>(0);
 
   const currentFrameRef = useRef<number>(0);
   const targetFrameRef = useRef<number>(0);
   const animationFrameId = useRef<number | null>(null);
-
-  // 1. Preload frame images progressively
-  useEffect(() => {
-    let loadedCount = 0;
-    const loadedImages: HTMLImageElement[] = new Array(TOTAL_FRAMES);
-
-    // First load frame 0 immediately
-    const firstImg = new Image();
-    firstImg.src = getFrameUrl(0);
-    firstImg.onload = () => {
-      loadedImages[0] = firstImg;
-      loadedCount++;
-      setLoadProgress(Math.round((loadedCount / TOTAL_FRAMES) * 100));
-
-      // Draw initial frame right away
-      if (canvasRef.current) {
-        drawFrameToCanvas(firstImg);
-      }
-
-      // Load remaining frames
-      for (let i = 1; i < TOTAL_FRAMES; i++) {
-        const img = new Image();
-        img.src = getFrameUrl(i);
-        img.onload = () => {
-          loadedImages[i] = img;
-          loadedCount++;
-          setLoadProgress(Math.round((loadedCount / TOTAL_FRAMES) * 100));
-          if (loadedCount >= TOTAL_FRAMES) {
-            setImages(loadedImages);
-            setIsLoaded(true);
-          }
-        };
-        img.onerror = () => {
-          // Graceful fallback to first image if any frame fails
-          loadedImages[i] = firstImg;
-          loadedCount++;
-          if (loadedCount >= TOTAL_FRAMES) {
-            setImages(loadedImages);
-            setIsLoaded(true);
-          }
-        };
-      }
-    };
-
-    return () => {
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current);
-      }
-    };
-  }, []);
 
   // Helper to draw an image centered and scaled with "cover" behavior onto canvas
   const drawFrameToCanvas = useCallback((img: HTMLImageElement) => {
@@ -91,8 +41,8 @@ export const CinematicCanvasScroller: React.FC<CinematicCanvasScrollerProps> = (
 
     const canvasWidth = canvas.width;
     const canvasHeight = canvas.height;
-    const imgWidth = img.naturalWidth || 1920;
-    const imgHeight = img.naturalHeight || 1080;
+    const imgWidth = img.naturalWidth || 1440;
+    const imgHeight = img.naturalHeight || 810;
 
     const scale = Math.max(canvasWidth / imgWidth, canvasHeight / imgHeight);
     const x = (canvasWidth - imgWidth * scale) / 2;
@@ -102,13 +52,120 @@ export const CinematicCanvasScroller: React.FC<CinematicCanvasScrollerProps> = (
     ctx.drawImage(img, x, y, imgWidth * scale, imgHeight * scale);
   }, []);
 
+  // Nearest-neighbor frame fallback ensuring zero blank flashes
+  const getLoadedFrame = useCallback((index: number): HTMLImageElement | null => {
+    const frames = imagesRef.current;
+    if (frames[index]) return frames[index];
+
+    // Search outward for closest available cached frame
+    for (let offset = 1; offset < TOTAL_FRAMES; offset++) {
+      if (index - offset >= 0 && frames[index - offset]) {
+        return frames[index - offset];
+      }
+      if (index + offset < TOTAL_FRAMES && frames[index + offset]) {
+        return frames[index + offset];
+      }
+    }
+    return null;
+  }, []);
+
+  // 1. Progressive Milestone Loader (Instant LCP & zero-wait scrolling)
+  useEffect(() => {
+    let isCancelled = false;
+
+    // Load a single frame and store in cache
+    const loadSingleFrame = (idx: number): Promise<HTMLImageElement> => {
+      return new Promise((resolve) => {
+        if (imagesRef.current[idx]) {
+          return resolve(imagesRef.current[idx]!);
+        }
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = getFrameUrl(idx);
+        img.onload = () => {
+          if (!isCancelled) {
+            imagesRef.current[idx] = img;
+          }
+          resolve(img);
+        };
+        img.onerror = () => {
+          // If a frame fails, reuse frame 0 or fallback
+          if (!isCancelled && imagesRef.current[0]) {
+            imagesRef.current[idx] = imagesRef.current[0];
+          }
+          resolve(img);
+        };
+      });
+    };
+
+    // Phase 1: Load Hero Frame 0 immediately for instant paint
+    loadSingleFrame(0).then((heroImg) => {
+      if (isCancelled) return;
+      drawFrameToCanvas(heroImg);
+      setIsReady(true);
+
+      // Phase 2: Load milestone keyframes (spaced across the 70 frames)
+      const milestones: number[] = [];
+      const step = 7;
+      for (let i = step; i < TOTAL_FRAMES; i += step) {
+        milestones.push(i);
+      }
+      if (!milestones.includes(TOTAL_FRAMES - 1)) {
+        milestones.push(TOTAL_FRAMES - 1);
+      }
+
+      // Load all keyframe milestones in parallel
+      Promise.all(milestones.map((idx) => loadSingleFrame(idx))).then(() => {
+        if (isCancelled) return;
+
+        // Phase 3: Polite background queue for remaining intermediate frames
+        const remaining: number[] = [];
+        for (let i = 1; i < TOTAL_FRAMES; i++) {
+          if (!milestones.includes(i)) {
+            remaining.push(i);
+          }
+        }
+
+        // Process in small micro-batches of 4 to leave network free for user interaction
+        let batchIndex = 0;
+        const batchSize = 4;
+
+        const processNextBatch = () => {
+          if (isCancelled || batchIndex >= remaining.length) return;
+          const chunk = remaining.slice(batchIndex, batchIndex + batchSize);
+          batchIndex += batchSize;
+
+          Promise.all(chunk.map((idx) => loadSingleFrame(idx))).then(() => {
+            if (!isCancelled) {
+              // Yield execution before next batch
+              if ('requestIdleCallback' in window) {
+                (window as any).requestIdleCallback(processNextBatch);
+              } else {
+                setTimeout(processNextBatch, 30);
+              }
+            }
+          });
+        };
+
+        processNextBatch();
+      });
+    });
+
+    return () => {
+      isCancelled = true;
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
+    };
+  }, [drawFrameToCanvas]);
+
   // Resize canvas to match display DPI
   useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const width = window.innerWidth;
       const height = window.innerHeight;
 
@@ -116,32 +173,31 @@ export const CinematicCanvasScroller: React.FC<CinematicCanvasScrollerProps> = (
       canvas.height = height * dpr;
 
       // Redraw current frame
-      const currentImg = images[Math.round(currentFrameRef.current)];
-      if (currentImg) {
-        drawFrameToCanvas(currentImg);
+      const frameIdx = Math.round(currentFrameRef.current);
+      const img = getLoadedFrame(frameIdx);
+      if (img) {
+        drawFrameToCanvas(img);
       }
     };
 
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [images, drawFrameToCanvas]);
+  }, [drawFrameToCanvas, getLoadedFrame]);
 
-  // Smooth frame interpolation loop (lerp for buttery motion)
+  // Smooth frame interpolation loop (lerp for buttery 60fps motion)
   useEffect(() => {
     const renderLoop = () => {
-      if (images.length > 0) {
-        const diff = targetFrameRef.current - currentFrameRef.current;
-        if (Math.abs(diff) > 0.01) {
-          currentFrameRef.current += diff * 0.15; // smooth lerp factor
-          const frameIndex = Math.min(
-            TOTAL_FRAMES - 1,
-            Math.max(0, Math.round(currentFrameRef.current))
-          );
-          const img = images[frameIndex];
-          if (img) {
-            drawFrameToCanvas(img);
-          }
+      const diff = targetFrameRef.current - currentFrameRef.current;
+      if (Math.abs(diff) > 0.01) {
+        currentFrameRef.current += diff * 0.18; // responsive lerp
+        const frameIndex = Math.min(
+          TOTAL_FRAMES - 1,
+          Math.max(0, Math.round(currentFrameRef.current))
+        );
+        const img = getLoadedFrame(frameIndex);
+        if (img) {
+          drawFrameToCanvas(img);
         }
       }
       animationFrameId.current = requestAnimationFrame(renderLoop);
@@ -151,7 +207,7 @@ export const CinematicCanvasScroller: React.FC<CinematicCanvasScrollerProps> = (
     return () => {
       if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
     };
-  }, [images, drawFrameToCanvas]);
+  }, [drawFrameToCanvas, getLoadedFrame]);
 
   // Scroll listener to compute scroll progress along the track
   useEffect(() => {
@@ -200,7 +256,7 @@ export const CinematicCanvasScroller: React.FC<CinematicCanvasScrollerProps> = (
     >
       {/* Sticky viewport container */}
       <div className="sticky top-0 left-0 w-full h-screen overflow-hidden flex items-center justify-center">
-        {/* Canvas for Scroll-Scrubbed Frame Sequence (Always active as instant visual layer) */}
+        {/* Canvas for Scroll-Scrubbed Frame Sequence */}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full object-cover"
@@ -210,19 +266,11 @@ export const CinematicCanvasScroller: React.FC<CinematicCanvasScrollerProps> = (
         <div className="absolute inset-0 bg-gradient-to-t from-emerald-darkest/90 via-transparent to-emerald-darkest/60 pointer-events-none" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-[#092D27]/30 to-[#051915]/85 pointer-events-none" />
 
-        {/* Loading Progress Bar (Before all frames loaded) */}
-        {!isLoaded && (
-          <div className="absolute top-20 sm:top-24 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 bg-emerald-darkest/90 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-champagne/30 text-[11px] sm:text-xs shadow-2xl">
-            <Sparkles className="w-3 h-3 text-champagne animate-spin shrink-0" />
-            <span className="text-ivory font-sans font-medium whitespace-nowrap">
-              Loading Film Frames ({loadProgress}%)
-            </span>
-            <div className="w-16 sm:w-20 h-1 bg-white/20 rounded-full overflow-hidden shrink-0">
-              <div
-                className="h-full bg-champagne transition-all duration-300"
-                style={{ width: `${loadProgress}%` }}
-              />
-            </div>
+        {/* Minimal Initial Mount Loader (Only visible for ~150ms before frame 0 appears) */}
+        {!isReady && (
+          <div className="absolute top-20 sm:top-24 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-emerald-darkest/90 backdrop-blur-md px-4 py-1.5 rounded-full border border-champagne/30 text-xs shadow-2xl animate-pulse">
+            <Sparkles className="w-3.5 h-3.5 text-champagne animate-spin shrink-0" />
+            <span className="text-ivory font-sans font-medium">Entering Sanctuary...</span>
           </div>
         )}
 

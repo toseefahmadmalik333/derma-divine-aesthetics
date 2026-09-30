@@ -40,6 +40,8 @@ export const DoctorSection: React.FC<DoctorSectionProps> = ({ onOpenBooking }) =
                 <img
                   src={leadDoctor.image}
                   alt={leadDoctor.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover object-top filter contrast-[1.02] group-hover:scale-105 transition-transform duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-emerald-darkest/90 via-transparent to-transparent pointer-events-none" />
@@ -129,6 +131,8 @@ export const DoctorSection: React.FC<DoctorSectionProps> = ({ onOpenBooking }) =
                     <img
                       src={doc.image}
                       alt={doc.name}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover"
                     />
                   </div>

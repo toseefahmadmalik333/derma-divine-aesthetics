@@ -31,6 +31,8 @@ export const ClinicSection: React.FC<ClinicSectionProps> = ({ onOpenBooking }) =
             <img
               src="/clinic/clinic-reception.png"
               alt="Derma Divine Medical and Aesthetic Centre reception in Johar Town Lahore"
+              loading="lazy"
+              decoding="async"
               className="w-full h-full min-h-[380px] lg:min-h-[500px] object-cover group-hover:scale-102 transition-transform duration-700"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-emerald-darkest/90 via-transparent to-transparent pointer-events-none" />
@@ -50,6 +52,8 @@ export const ClinicSection: React.FC<ClinicSectionProps> = ({ onOpenBooking }) =
               <img
                 src="/clinic/clinic-exterior-consultation.png"
                 alt="Clinic entrance and welcome area"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               />
             </div>

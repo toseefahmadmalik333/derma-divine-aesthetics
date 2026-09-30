@@ -42,6 +42,8 @@ export const ResultsSection: React.FC = () => {
             <img
               src="/results/hair-restoration-before-after.png"
               alt="Hair restoration before and after outcome"
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover"
             />
 
@@ -116,6 +118,8 @@ export const ResultsSection: React.FC = () => {
                 <img
                   src="/results/patient-journey-steps.png"
                   alt="Patient journey through procedural stages"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-auto object-cover"
                 />
               </div>
@@ -138,6 +142,8 @@ export const ResultsSection: React.FC = () => {
                 <img
                   src="/results/radiance-confidence.png"
                   alt="Natural radiant skin outcome"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-auto object-cover"
                 />
               </div>

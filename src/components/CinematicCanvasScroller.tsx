@@ -27,7 +27,7 @@ const getFrameUrl = (index: number): string => {
   let frameNum = index + 1;
   if (frameNum >= 68) frameNum += 1; // map 68->69, 69->70, 70->71
   const padded = String(frameNum).padStart(3, '0');
-  return `/video-frames/frame_${padded}.png`;
+  return `/video-frames/frame_${padded}.jpg`;
 };
 
 export const CinematicCanvasScroller: React.FC<CinematicCanvasScrollerProps> = ({ onOpenBooking }) => {
